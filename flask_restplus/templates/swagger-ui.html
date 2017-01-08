@@ -24,6 +24,63 @@
                     $('pre code').each(function(i, e) {
                         hljs.highlightBlock(e)
                     });
+
+                    {% if config.JWT_AUTH_URL_RULE -%}
+                        function trim(x) {
+                            return x.replace(/^\s+|\s+$/gm,'');
+                        }
+
+                        var jwtAuthUI = '<h3>JWT credentials:</h3>' +
+                                        '<div class="input"><input placeholder="username" id="jwt_username" name="jwt_username" type="text" size="30"></div>' +
+                                        '<div class="input"><input placeholder="password" id="jwt_password" name="jwt_password" type="password" size="30"></div>';
+
+                        $(jwtAuthUI).insertAfter("#api_info");
+
+                        var jwt_username = $('#jwt_username').val();
+                        var jwt_password = $('#jwt_password').val();
+
+                        function addAuthorization() {
+                            if (jwt_username !== '' && jwt_password !== '') {
+                                console.log('addAuthorization: ' + jwt_username + ':' + jwt_password);
+
+                                var data = { 'username': jwt_username, 'password': jwt_password };
+                                console.log(data);
+                                $.ajax({
+                                    url: '/auth/login',
+                                    data: JSON.stringify(data),
+                                    dataType: 'json',
+                                    type: 'POST',
+                                    contentType: 'application/json;charset=UTF-8',
+                                    success: function(response) {
+                                        var jwt_token = response['access_token'];
+                                        swaggerUi.api.clientAuthorizations.add("key", new SwaggerClient.ApiKeyAuthorization("Authorization", "JWT " + jwt_token, "header"));
+                                    },
+                                    error: function(error) {
+                                        console.log(error);
+                                    }
+                                });
+                            }
+                        }
+
+                        addAuthorization();
+
+                        $("#jwt_username").on("change paste", function() {
+                            var value = trim($(this).val());
+                            if (jwt_username !== value) {
+                                jwt_username = value;
+                                addAuthorization();
+                            }
+                        });
+
+                         $("#jwt_password").on("change paste", function() {
+                            var value = trim($(this).val());
+                            if (jwt_password !== value) {
+                                jwt_password = value;
+                                addAuthorization();
+                            }
+                        });
+
+                    {%- endif %}
                 },
                 onFailure: function(data) {
                     log("Unable to Load SwaggerUI");
