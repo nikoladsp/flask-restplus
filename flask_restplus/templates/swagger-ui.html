@@ -1,24 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
+    {% if config.WTF_CSRF_ENABLED -%}
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {%- endif %}
     <title>{{ title }}</title>
     {% include 'swagger-ui-css.html' %}
     {% include 'swagger-ui-libs.html' %}
     <script type="text/javascript">
         $(function () {
+            {% if config.WTF_CSRF_ENABLED -%}
+                // get CSRF token from meta tag
+                var csrftoken = $('meta[name=csrf-token]').attr('content');
 
-             // get CSRF token from meta tag
-            var csrftoken = $('meta[name=csrf-token]').attr('content');
-
-            // whenever we send a AJAX POST request, we add the X-CSRFToken for it
-            $.ajaxSetup({
-                beforeSend: function(xhr, settings) {
-                    if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
-                        xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                // whenever we send a AJAX POST request, we add the X-CSRFToken for it
+                $.ajaxSetup({
+                    beforeSend: function(xhr, settings) {
+                        if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+                            xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                        }
                     }
-                }
-            });
+                });
+            {%- endif %}
 
             window.swaggerUi = new SwaggerUi({
                 url: "{{ specs_url }}",
@@ -26,17 +29,19 @@
                 dom_id: "swagger-ui-container",
                 supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
                 authorizations: {
-                   csrfInterceptor: function() {
-                     // This function will get called /before/ each request
-                     // ... UNLESS you have a 'security' tag in the swagger.json file,
-                     // ... in which case you must add 'csrfInterceptor' to the list of auths.
-                     var csrftoken = $('meta[name=csrf-token]').attr('content')
-                     this.headers['X-CSRFToken'] = csrftoken;
-                     return true;
-                       // there is a bug, fixed but not in develop_2.0 of swagger-ui.js where returning true will only
-                       //   process _one_ interceptor This works if it's your only interceptor and
-                       //   when the fix is in, it'll work as expected for more than one...
-                   }
+                    {% if config.WTF_CSRF_ENABLED -%}
+                        csrfInterceptor: function() {
+                        // This function will get called /before/ each request
+                        // ... UNLESS you have a 'security' tag in the swagger.json file,
+                        // ... in which case you must add 'csrfInterceptor' to the list of auths.
+                        var csrftoken = $('meta[name=csrf-token]').attr('content')
+                        this.headers['X-CSRFToken'] = csrftoken;
+                        return true;
+                        // there is a bug, fixed but not in develop_2.0 of swagger-ui.js where returning true will only
+                        //   process _one_ interceptor This works if it's your only interceptor and
+                        //   when the fix is in, it'll work as expected for more than one...
+                        }
+                    {%- endif %}
                 },
                 onComplete: function(swaggerApi, swaggerUi){
                     if(typeof initOAuth == "function") {
@@ -53,60 +58,15 @@
                     });
 
                     {% if config.JWT_AUTH_URL_RULE -%}
-                        function trim(x) {
-                            return x.replace(/^\s+|\s+$/gm,'');
-                        }
-
-                        var jwtAuthUI = '<h3>JWT credentials:</h3>' +
-                                        '<div class="input"><input placeholder="username" id="jwt_username" name="jwt_username" type="text" size="30"></div>' +
-                                        '<div class="input"><input placeholder="password" id="jwt_password" name="jwt_password" type="password" size="30"></div>';
-
-                        $(jwtAuthUI).insertAfter("#api_info");
-
-                        var jwt_username = $('#jwt_username').val();
-                        var jwt_password = $('#jwt_password').val();
-
-                        function addAuthorization() {
-                            if (jwt_username !== '' && jwt_password !== '') {
-                                console.log('addAuthorization: ' + jwt_username + ':' + jwt_password);
-
-                                var data = { 'username': jwt_username, 'password': jwt_password };
-                                console.log(data);
-                                $.ajax({
-                                    url: '/auth/login',
-                                    data: JSON.stringify(data),
-                                    dataType: 'json',
-                                    type: 'POST',
-                                    contentType: 'application/json;charset=UTF-8',
-                                    success: function(response) {
-                                        var jwt_token = response['access_token'];
-                                        swaggerUi.api.clientAuthorizations.add("key", new SwaggerClient.ApiKeyAuthorization("Authorization", "JWT " + jwt_token, "header"));
-                                    },
-                                    error: function(error) {
-                                        console.log(error);
-                                    }
-                                });
-                            }
-                        }
-
-                        addAuthorization();
-
-                        $("#jwt_username").on("change paste", function() {
-                            var value = trim($(this).val());
-                            if (jwt_username !== value) {
-                                jwt_username = value;
-                                addAuthorization();
+                         //console.log($('#swagger-ui-container')[0].outerHTML);
+                        $(document).find('div.response_headers').bind('DOMSubtreeModified', function(event) {
+                            var response = JSON.parse($(this).text());
+                            var tokenField = 'jwt-token';
+                            if (response.hasOwnProperty(tokenField)) {
+                                var jwt_token = response[tokenField];
+                                swaggerUi.api.clientAuthorizations.add("key", new SwaggerClient.ApiKeyAuthorization("Authorization", "JWT " + jwt_token, "header"));
                             }
                         });
-
-                         $("#jwt_password").on("change paste", function() {
-                            var value = trim($(this).val());
-                            if (jwt_password !== value) {
-                                jwt_password = value;
-                                addAuthorization();
-                            }
-                        });
-
                     {%- endif %}
                 },
                 onFailure: function(data) {
